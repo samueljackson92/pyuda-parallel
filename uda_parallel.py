@@ -1,15 +1,21 @@
+import time
 import functools
 import multiprocessing as mp
 import pyuda
 from mast.mast_client import ListType
 
-MAX_SIGNALS = 1000
+DELAY = 1.0
+MAX_SIGNALS = 100
 
-def get_signal(name, client, shot):
+def get_signal(name, client, shot, delay=None):
     if client is None:
         client = pyuda.Client()
 
+    if delay is not None:
+        time.sleep(delay)
+
     try:
+
         signal = client.get(name, shot)
     except pyuda.ServerException as exception:
         print(exception)
@@ -33,7 +39,7 @@ def get_signals_mp(shot: int, shared_client: bool):
 
     c = client if not shared_client else None
     
-    _get_signal = functools.partial(get_signal, client=c, shot=shot)
+    _get_signal = functools.partial(get_signal, client=c, shot=shot, delay=DELAY)
 
     pool = mp.Pool(8)
     for signal in pool.map(_get_signal, names):
