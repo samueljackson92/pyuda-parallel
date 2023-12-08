@@ -3,7 +3,7 @@ import functools
 import multiprocessing as mp
 from mast.mast_client import ListType
 
-DELAY = 1.0
+DELAY = 0.0
 MAX_SIGNALS = 100
 
 def get_signal(name, client, shot, delay=None):
@@ -51,5 +51,19 @@ def get_signals_mp(shot: int, shared_client: bool):
     for signal in pool.map(_get_signal, names):
         yield signal
 
+def get_shots(name: str):
+    import pyuda
+    client = pyuda.Client()
+    shots = range(30120, 30420)
+    for shot in shots:
+        yield get_signal(name, client, shot)
+        
+def get_shots_mp(name: str, shared_client: bool):
+    shots = range(30120, 30420)
+    c = get_client() if not shared_client else None
+    
+    _get_signal = functools.partial(get_signal, name, c, delay=DELAY)
 
-
+    pool = mp.Pool(8)
+    for signal in pool.map(_get_signal, shots):
+        yield signal
