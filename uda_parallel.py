@@ -1,69 +1,61 @@
-import time
+import pyuda
 import functools
 import multiprocessing as mp
 from mast.mast_client import ListType
 
-DELAY = 0.0
+# Limit the number of signals so it doesn't take too long to run
 MAX_SIGNALS = 100
 
-def get_signal(name, client, shot, delay=None):
-    import pyuda
-    if client is None:
-        client = get_client()
+# This is how many signals we get back if we get the signals serially.
+# We should get the same number of shots when using multi-processing
+EXPECTED_NUM_SIGNALS = 99
 
-    if delay is not None:
-        time.sleep(delay)
 
+def get_signal(name, shot):
+    client = pyuda.Client()
     try:
-
         signal = client.get(name, shot)
-    except pyuda.ServerException as exception:
-        print(exception)
+    except pyuda.ServerException as e:
         signal = None
     return signal
 
-def get_client():
-    import pyuda
-    return pyuda.Client()
 
 def get_names(shot):
-    client = get_client()
+    client = pyuda.Client()
     signal_items = client.list(ListType.SIGNALS, shot)
     signal_items = signal_items[:MAX_SIGNALS]
     names = [signal_item.signal_name for signal_item in signal_items]
     return names
 
+
 def get_signals_serial(shot: int):
-    import pyuda
-    client = pyuda.Client()
     names = get_names(shot)
     for name in names:
-        yield get_signal(name, client, shot)
+        yield get_signal(name, shot)
 
-def get_signals_mp(shot: int, shared_client: bool):
+
+def get_signals_mp(shot: int):
     names = get_names(shot)
-    
-    c = get_client() if not shared_client else None
-    
-    _get_signal = functools.partial(get_signal, client=c, shot=shot, delay=DELAY)
+
+    _get_signal = functools.partial(get_signal, shot=shot)
 
     pool = mp.Pool(8)
     for signal in pool.map(_get_signal, names):
         yield signal
 
-def get_shots(name: str):
-    import pyuda
-    client = pyuda.Client()
-    shots = range(30120, 30420)
-    for shot in shots:
-        yield get_signal(name, client, shot)
-        
-def get_shots_mp(name: str, shared_client: bool):
-    shots = range(30120, 30420)
-    c = get_client() if not shared_client else None
-    
-    _get_signal = functools.partial(get_signal, name, c, delay=DELAY)
 
-    pool = mp.Pool(8)
-    for signal in pool.map(_get_signal, shots):
-        yield signal
+def test_serial():
+
+    signals = get_signals_serial(30420)
+    signals = filter(lambda x: x is not None, signals)
+    count = len(list(signals))
+
+    assert count == EXPECTED_NUM_SIGNALS
+
+
+def test_mp():
+    signals = get_signals_mp(30420)
+    signals = filter(lambda x: x is not None, signals)
+    count = len(list(signals))
+
+    assert count == EXPECTED_NUM_SIGNALS
